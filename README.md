@@ -32,7 +32,7 @@ Branch head: aggregates only. Company: all exams + a review list of questions wh
 
 ## Deploy on Railway
 
-1. **New Project → Deploy from GitHub repo** → pick this repository. Railway detects Node from `package.json` and uses `railway.json` (start `npm start`, health check `/api/health`).
+1. **New Project → Deploy from GitHub repo** → pick this repository. Railway detects Node 22 from `package.json` / `.node-version` and uses `railway.json` (start `node server/server.js`, health check `/api/health`).
 2. In the same project: **+ New → Database → MongoDB**.
 3. Open the app service → **Variables** and add:
 
@@ -46,6 +46,8 @@ Branch head: aggregates only. Company: all exams + a review list of questions wh
 4. **Settings → Networking → Generate Domain.** Open it.
 
 On the first boot the database is empty, so the server seeds the demo data (3 exams, 47 accounts) in the background and fetches the YouTube course lists — give it about a minute. Set `AUTO_SEED=false` to skip this. `PORT` is provided by Railway; the server binds `0.0.0.0` and trusts Railway's proxy for client IPs and HTTPS.
+
+If the app is up but the deploy logs say `MongoDB not reachable … retrying`, the `MONGO_URL` variable is missing or points to the wrong service; the server keeps retrying (it does not crash) and answers 503 until the database is reachable.
 
 > The demo accounts share one known password. Change `DEMO_PASSWORD` (before the first boot) or turn off `AUTO_SEED` for anything beyond a demo.
 

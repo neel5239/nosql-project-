@@ -10,7 +10,7 @@
     "test": "python tests/e2e_v4.py"
   },
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "dependencies": {
     "bcryptjs": "3.0.3",

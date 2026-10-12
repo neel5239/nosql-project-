@@ -9,7 +9,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 require('../public/engine.js');
-const { connect, col } = require('./db');
+const { connect, col, close, DB_NAME } = require('./db');
 const { getRecommendations } = require('./youtube');
 const X = require('./exams');
 const E = globalThis.ANUMAAN_ENGINE;
@@ -69,6 +69,9 @@ function routeFor(email) {
 }
 
 /* ---------- middleware ---------- */
+// until MongoDB is connected every API call except the health check answers 503 instead of crashing
+let dbReady = false;
+app.use('/api', (req, res, next) => (dbReady || req.path === '/health') ? next() : res.status(503).json({ error: 'Starting up — try again in a few seconds.' }));
 app.use('/api', express.json({ limit: '1200kb', strict: true }));
 app.use('/api', (req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -516,7 +519,10 @@ app.get('/api/recommendations/:topic/:band', auth(), wrap(async (req, res) => {
   res.json(await getRecommendations(t.id, t.name, b.id));
 }));
 
-app.get('/api/health', wrap(async (req, res) => { await col('users').estimatedDocumentCount(); res.json({ ok: true, db: 'mongodb' }) }));
+app.get('/api/health', wrap(async (req, res) => {
+  if (!dbReady) return res.status(503).json({ ok: false, db: 'connecting' });
+  await col('users').estimatedDocumentCount(); res.json({ ok: true, db: 'mongodb' });
+}));
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }));
 
 /* static frontend */
@@ -542,9 +548,23 @@ async function autoSeed() {
 
 if (require.main === module) {
   const HOST = process.env.HOST || '0.0.0.0';
-  connect()
-    .then(autoSeed)
-    .then(() => app.listen(PORT, HOST, () => console.log(`ANUMAAN listening on ${HOST}:${PORT} (MongoDB)`)))
-    .catch(e => { console.error('MongoDB not reachable:', e.message); process.exit(1) });
+  // listen first, then keep retrying MongoDB: a slow or missing database must not crash-loop the container
+  app.listen(PORT, HOST, () => console.log(`ANUMAAN listening on ${HOST}:${PORT}`));
+  if (process.env.RAILWAY_ENVIRONMENT && !process.env.MONGO_URL && !process.env.MONGO_URI)
+    console.error('MONGO_URL is not set. In Railway add a MongoDB service and set MONGO_URL=${{MongoDB.MONGO_URL}} on this service.');
+  process.on('unhandledRejection', e => console.error('Unhandled rejection:', e));
+  (async function start(attempt = 1) {
+    try {
+      await connect();
+      dbReady = true;
+      console.log('MongoDB connected (database ' + DB_NAME + ')');
+      await autoSeed();
+    } catch (e) {
+      await close().catch(() => {});
+      const wait = Math.min(30, 2 * attempt);
+      console.error(`MongoDB not reachable (attempt ${attempt}): ${e.message} — retrying in ${wait}s`);
+      setTimeout(() => start(attempt + 1), wait * 1000);
+    }
+  })();
 }
 module.exports = { app, routeFor };
