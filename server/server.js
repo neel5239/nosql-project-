@@ -70,8 +70,10 @@ function routeFor(email) {
 
 /* ---------- middleware ---------- */
 // until MongoDB is connected every API call except the health check answers 503 instead of crashing
-let dbReady = false;
-app.use('/api', (req, res, next) => (dbReady || req.path === '/health') ? next() : res.status(503).json({ error: 'Starting up — try again in a few seconds.' }));
+let dbReady = false, dbAttempts = 0;
+const notReady = () => dbAttempts < 3 ? 'Starting up — try again in a few seconds.'
+  : 'The server cannot reach its database. (Admin: check MONGO_URL — on Railway set it to ${{MongoDB.MONGO_URL}}.)';
+app.use('/api', (req, res, next) => (dbReady || req.path === '/health') ? next() : res.status(503).json({ error: notReady() }));
 app.use('/api', express.json({ limit: '1200kb', strict: true }));
 app.use('/api', (req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -520,7 +522,7 @@ app.get('/api/recommendations/:topic/:band', auth(), wrap(async (req, res) => {
 }));
 
 app.get('/api/health', wrap(async (req, res) => {
-  if (!dbReady) return res.status(503).json({ ok: false, db: 'connecting' });
+  if (!dbReady) return res.status(503).json({ ok: false, db: 'connecting', attempts: dbAttempts });
   await col('users').estimatedDocumentCount(); res.json({ ok: true, db: 'mongodb' });
 }));
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }));
@@ -560,6 +562,7 @@ if (require.main === module) {
       console.log('MongoDB connected (database ' + DB_NAME + ')');
       await autoSeed();
     } catch (e) {
+      dbAttempts = attempt;
       await close().catch(() => {});
       const wait = Math.min(30, 2 * attempt);
       console.error(`MongoDB not reachable (attempt ${attempt}): ${e.message} — retrying in ${wait}s`);
