@@ -29,12 +29,12 @@ document.addEventListener('keydown',e=>{
   if((e.key==='Enter'||e.key===' ')&&el.matches&&el.matches('tr[data-act]')){e.preventDefault();el.click()}
 });
 
-/* ---------- theme: OS preference until signed in, then the user's saved choice (MongoDB) ---------- */
+/* ---------- theme: light until signed in, then the user's saved choice (MongoDB) ---------- */
 const sysDark=matchMedia('(prefers-color-scheme: dark)');
 /* pref is 'light' | 'dark' | 'system'; the page always shows a resolved light or dark */
-let THEME_PREF='system';
+let THEME_PREF='light';
 function applyTheme(pref){
-  THEME_PREF=pref||'system';
+  THEME_PREF=pref||'light';
   const t=THEME_PREF==='system'?(sysDark.matches?'dark':'light'):THEME_PREF;
   document.documentElement.dataset.theme=t;
   $$('[data-theme-toggle]').forEach(b=>{
@@ -51,7 +51,7 @@ async function toggleTheme(){
   applyTheme(t);
   if(ME){ try{ await API.patch('/api/me/prefs',{theme:t}); ME.prefs.theme=t; if(VIEW==='settings') renderSettings() }catch(e){ toast(esc(e.message)) } }
 }
-applyTheme('system');
+applyTheme('light');
 
 /* ---------- toast + loading ---------- */
 let toastT;
@@ -144,7 +144,7 @@ async function signOut(){
   clearInterval(liveTimer);
   $('#appShell').classList.remove('on'); $('#loginScreen').classList.add('on');
   document.title='Sign in — ANUMAAN';
-  applyTheme('system');
+  applyTheme('light');
   previewRoute(); $('#lgEmail').focus();
   toast('Signed out.');
 }

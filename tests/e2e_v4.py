@@ -59,6 +59,8 @@ def suite_contrast(b):
       out.button=+cr(probe('--acc-text'),probe('--acc')).toFixed(2); return out }"""
     for theme in ["light", "dark"]:
         c = b.new_context(color_scheme=theme); p = c.new_page(); p.goto(BASE); p.wait_for_load_state("networkidle")
+        if theme == "light": check("signed-out page opens light even when the OS is light/dark", p.evaluate("document.documentElement.dataset.theme") == "light")
+        if theme == "dark": p.click(".theme-t"); check("theme button switches the page to dark", p.evaluate("document.documentElement.dataset.theme") == "dark")
         r = p.evaluate(js); low = {k: v for k, v in r.items() if v < 4.5}
         check(f"{theme}: all text/status colours ≥ 4.5:1", not low, low or r); c.close()
 
