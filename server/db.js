@@ -11,7 +11,16 @@ async function connect() {
   client = new MongoClient(URI, { serverSelectionTimeoutMS: 4000 });
   await client.connect();
   db = client.db(DB_NAME);
-  await ensureIndexes(db);
+  try {
+    await ensureIndexes(db);
+  } catch (e) {
+    if (!/disk space/i.test(e.message)) throw e;
+    // MongoDB 7.1+ refuses index builds with < 500 MB free disk. Small hosted volumes
+    // (Railway's trial volume is 0.5 GB in total) never have that much; this app's data is a few MB.
+    console.log('Low free disk on the MongoDB volume — lowering indexBuildMinAvailableDiskSpaceMB to 50');
+    await client.db('admin').command({ setParameter: 1, indexBuildMinAvailableDiskSpaceMB: 50 });
+    await ensureIndexes(db);
+  }
   return db;
 }
 
