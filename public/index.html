@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Sign in — ANUMAAN</title>
+<meta name="description" content="ANUMAAN shows which difficulty level a coaching student breaks at — and whether they know it.">
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#appMain">Skip to content</a>
+
+<!-- ============ LOGIN (front page) ============ -->
+<div id="loginScreen" class="on">
+  <div class="lg-top">
+    <div class="brand"><span class="logo" aria-hidden="true">अ</span>ANUMAAN</div>
+    <button type="button" class="theme-t" data-theme-toggle aria-label="Switch to dark theme"></button>
+  </div>
+  <main class="lg-wrap" id="loginMain">
+    <section class="lg-intro">
+      <h1>Know the exact level<br>each student <span class="hl">breaks at.</span></h1>
+      <p>Marks say 62%. ANUMAAN shows the difficulty band where a student stops clearing questions,
+         how it compares with the teacher's rating and the batch, and a YouTube course for every weak topic — from one tap per question, no marks.</p>
+      <ul class="lg-points">
+        <li><span data-ic="checkCircle"></span>Two-tap survey after any test — no new exam</li>
+        <li><span data-ic="checkCircle"></span>Four dashboards: student, teacher, branch, company</li>
+        <li><span data-ic="checkCircle"></span>Free course + video picks for every weak topic</li>
+      </ul>
+    </section>
+
+    <section class="lg-side">
+      <form class="card lg-card" id="lgForm" novalidate>
+        <h2>Sign in</h2>
+        <p class="muted">Use your institute e-mail. Your domain decides your dashboard.</p>
+        <label class="lbl" for="lgEmail">Institute e-mail</label>
+        <input id="lgEmail" class="in" type="email" inputmode="email" placeholder="name@student.allen.edu.in"
+               autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="120" aria-describedby="lgErr lgRoute">
+        <label class="lbl" for="lgPass">Password</label>
+        <div class="pw">
+          <input id="lgPass" class="in" type="password" placeholder="Password" maxlength="64" autocomplete="current-password">
+          <button type="button" class="eye" id="lgEye" aria-label="Show password" aria-pressed="false" data-ic="eye"></button>
+        </div>
+        <div id="lgErr" class="err" role="alert" aria-live="assertive"></div>
+        <div id="lgRoute" class="route" aria-live="polite"></div>
+        <button type="submit" class="btn p lg" id="lgBtn">Sign in</button>
+      </form>
+
+      <div class="card demo">
+        <h2 class="demo-t" id="lgAccT">Demo accounts <span>password <b class="mono">anumaan</b></span></h2>
+        <div id="lgAccList" role="list" aria-labelledby="lgAccT"></div>
+        <p class="muted small">Any of the 40 students works too — <span class="mono">firstname.lastname@student.allen.edu.in</span> (e.g. diya.verma, kavya.kulkarni).</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ============ APP ============ -->
+<div class="app" id="appShell">
+  <aside class="side" id="side" aria-label="Account and navigation">
+    <div class="side-top">
+      <div class="brand"><span class="logo" aria-hidden="true">अ</span><span class="brand-t">ANUMAAN</span></div>
+      <button type="button" class="side-x" data-act="sideToggle" aria-label="Collapse sidebar" aria-expanded="true" id="sideToggle"></button>
+    </div>
+    <button type="button" class="side-acc" id="sideAcc" data-act="nav" data-arg="profile" aria-label="Open your profile"></button>
+    <nav class="side-nav" id="sideNav" aria-label="Main"></nav>
+    <div class="side-foot">
+      <button type="button" class="side-link" data-theme-toggle><span class="si" id="themeIc"></span><span class="sl" id="themeLbl">Dark theme</span></button>
+      <button type="button" class="side-link" data-sign-out><span class="si" data-ic="logout"></span><span class="sl">Sign out</span></button>
+    </div>
+  </aside>
+  <div class="side-scrim" id="sideScrim" data-act="sideClose" hidden></div>
+  <div class="main-col">
+    <header class="app-bar">
+      <button type="button" class="theme-t burger" data-act="sideOpen" aria-label="Open menu" aria-controls="side" aria-expanded="false" id="burger"></button>
+      <div class="ab-mid" id="abContext"></div>
+      <div class="ab-right">
+        <button type="button" class="theme-t bell" id="bell" data-act="bell" aria-label="Notifications" hidden></button>
+      </div>
+    </header>
+    <main class="app-body" id="appMain" tabindex="-1">
+      <div id="loading" class="loading" hidden><span class="spin" aria-hidden="true"></span>Loading from the database…</div>
+      <div class="pane" id="pane-student"></div>
+      <div class="pane" id="pane-teacher"></div>
+      <div class="pane" id="pane-branch"></div>
+      <div class="pane" id="pane-company"></div>
+      <div class="pane" id="pane-profile"></div>
+      <div class="pane" id="pane-settings"></div>
+    </main>
+  </div>
+</div>
+
+<div id="modal" class="modal" hidden><div class="modal-in card" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><button type="button" class="modal-x" data-close-modal aria-label="Close dialog">✕</button><div id="modalBody"></div></div></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="engine.js"></script>
+<script src="perception.js"></script>
+<script src="icons.js"></script>
+<script src="api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "anumaan",
+  "version": "4.0.0",
+  "private": true,
+  "description": "ANUMAAN v4 \u2014 one-tap difficulty survey for coaching institutes. Express 5 + MongoDB.",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "seed": "node server/seed.js",
+    "test": "python tests/e2e_v4.py"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bcryptjs": "3.0.3",
+    "express": "5.3.0",
+    "express-rate-limit": "8.7.1",
+    "helmet": "8.3.0",
+    "mongodb": "7.7.0"
+  }
+}
