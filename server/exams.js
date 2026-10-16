@@ -39,14 +39,42 @@ async function engineFor(examId) {
   return out;
 }
 
+/* Courses for every paper a student rated, picked from their own result on that paper:
+   - the share of the paper that felt comfortable decides how many topics (under 40% → 3, under 65% → 2, else 1)
+   - topics are ranked by room above the comfort ceiling, the gap to the batch, questions that felt
+     harder than the batch, and blind spots (felt 2+ levels harder than the teacher rated)
+   - a topic with a clear problem is always included; each one gets courses one level above the ceiling */
 async function recosFor(rep) {
-  const weak = rep.focus.filter(o => o.score > 1.2).slice(0, 3);
-  return Promise.all(weak.map(async o => {
-    const target = o.my === '—' ? 'L1' : E.BANDS[Math.min(3, E.bandIdx(o.my) + 1)].id;
+  const blindBy = {};
+  rep.harderThanTeacher.forEach(d => { blindBy[d.q.topic] = (blindBy[d.q.topic] || 0) + 1 });
+  const ranked = rep.focus.map(o => {
+    const mi = o.my === '—' ? -1 : E.bandIdx(o.my), blind = blindBy[o.t.id] || 0;
+    return { o, mi, blind, need: o.score + (3 - mi) * 0.9 + blind * 1.2 };
+  }).sort((a, b) => b.need - a.need);
+  const n = rep.comfortPct < 40 ? 3 : rep.comfortPct < 65 ? 2 : 1;
+  const must = ranked.filter(x => x.o.score > 1.2 || x.blind > 0 || x.mi < 0);
+  const pick = [...must, ...ranked.filter(x => !must.includes(x))].slice(0, Math.min(3, Math.max(n, must.length)));
+  return Promise.all(pick.map(async ({ o, mi, blind }) => {
+    const target = mi < 0 ? 'L1' : E.BANDS[Math.min(3, mi + 1)].id;
+    const why = [];
+    if (mi < 0) why.push('No level of this topic felt comfortable yet');
+    else why.push(`Comfortable up to ${o.my}${o.bt !== '—' && o.delta < 0 ? ` — your batch is comfortable up to ${o.bt}` : ''}`);
+    if (o.nHard) why.push(`${o.nHard} question${o.nHard === 1 ? '' : 's'} felt harder to you than to your batch`);
+    if (blind) why.push(`${blind} blind spot${blind === 1 ? '' : 's'} — felt 2+ levels harder than the teacher rated`);
+    if (!o.nHard && !blind && mi >= 0) why.push(mi >= 3 ? 'Keep practising at Elite level' : `Next step: move from ${o.my} to ${target}`);
     const r = await getRecommendations(o.t.id, o.t.name, target);
-    return { topic: o.t.id, topicName: o.t.name, ceiling: o.my, target, urgency: o.score > 3 ? 'urgent' : 'work on it',
+    return { topic: o.t.id, topicName: o.t.name, ceiling: o.my, batchCeiling: o.bt, target, why, blindSpots: blind, harderThanBatch: o.nHard,
+      urgency: o.score > 3 || mi < 0 ? 'urgent' : (o.score > 1.2 || blind) ? 'work on it' : 'next step',
       courses: r.courses, videos: r.videos, fetchedAt: r.fetchedAt, source: r.source, error: r.error || null };
   }));
+}
+
+/* history rows written before RECO_V lack the per-exam picks: rebuild them once at start-up */
+const RECO_V = 2;
+async function refreshHistory() {
+  for (const ex of await col('exams').find({ status: { $ne: 'draft' } }, { projection: { _id: 1 } }).toArray()) {
+    if (await col('student_history').findOne({ examId: ex._id, recoV: { $ne: RECO_V } }, { projection: { _id: 1 } })) await snapshot(ex._id);
+  }
 }
 
 /* history = what the student saw for this exam, kept even after the batch moves on */
@@ -67,9 +95,9 @@ async function snapshot(examId, studentIds) {
       ceilings: Object.fromEntries(rep.topics.map(o => [o.t.id, o.my])),
       batchCeilings: Object.fromEntries(rep.topics.map(o => [o.t.id, o.bt])),
       weak: rep.focus.filter(o => o.score > 1.2).map(o => ({ topic: o.t.id, topicName: o.t.name, ceiling: o.my })),
-      recommendations: recos.map(r => ({ topicName: r.topicName, ceiling: r.ceiling, target: r.target,
+      recommendations: recos.map(r => ({ topicName: r.topicName, ceiling: r.ceiling, target: r.target, urgency: r.urgency, why: r.why,
         items: [...r.courses, ...r.videos].map(v => ({ kind: v.kind, title: v.title, channel: v.channel, url: v.url, thumb: v.thumb })) })),
-      surveyedAt: svs.get(sid) || null, final: exam.status === 'closed', updatedAt: new Date()
+      surveyedAt: svs.get(sid) || null, final: exam.status === 'closed', recoV: RECO_V, updatedAt: new Date()
     } }, { upsert: true });
     n++;
   }
@@ -85,4 +113,4 @@ async function notifySurvey(exam, studentIds) {
   return studentIds.length;
 }
 
-module.exports = { engineFor, bump, snapshot, recosFor, notifySurvey, load, MIN_READY };
+module.exports = { engineFor, bump, snapshot, recosFor, refreshHistory, notifySurvey, load, MIN_READY };

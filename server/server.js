@@ -561,6 +561,7 @@ if (require.main === module) {
       dbReady = true;
       console.log('MongoDB connected (database ' + DB_NAME + ')');
       await autoSeed();
+      X.refreshHistory().catch(e => console.error('History refresh failed:', e.message));
     } catch (e) {
       dbAttempts = attempt;
       await close().catch(() => {});

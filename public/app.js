@@ -321,11 +321,12 @@ async function renderLearn(){
     catch(e){ body.innerHTML=`<div class="card empty-state">${IC('alert')}<h2>Could not load recommendations</h2><p>${esc(e.message)}</p><button type="button" class="btn p" data-act="recoRetry">Try again</button></div>`; return }
     if(SVIEW!=='learn') return;
   }
-  if(!RECO.length){ body.innerHTML=`<div class="card empty-state">${IC('checkCircle')}<h2>No weak topics on this paper</h2><p>You felt at least as comfortable as your batch everywhere in ${esc(REP_EXAM.title)}.</p></div>`; return }
-  body.innerHTML=`<div class="banner">${IC('book')}<span>For the topics that felt hardest to you in <b>${esc(REP_EXAM.title)}</b>, one level above your comfort ceiling. Fetched from YouTube and saved in our database.</span></div>
+  if(!RECO.length){ body.innerHTML=`<div class="card empty-state">${IC('checkCircle')}<h2>Nothing to recommend yet</h2><p>Courses appear once your ratings for ${esc(REP_EXAM.title)} are in the report.</p></div>`; return }
+  body.innerHTML=`<div class="banner">${IC('book')}<span>Picked from your result on <b>${esc(REP_EXAM.title)}</b> — ${esc(REPORT.comfortPct)}% of the paper felt comfortable. Topics are ranked by your comfort ceiling, the gap to your batch and your blind spots; each course is one level above where you are comfortable now. Fetched from YouTube and saved in our database.</span></div>
   ${RECO.map(r=>`<section class="card reco" aria-labelledby="rc-${r.topic}">
-     <div class="reco-h"><h2 id="rc-${r.topic}">${esc(r.topicName)}</h2><span class="pill ${r.urgency==='urgent'?'trap':'scare'}">${esc(r.urgency)}</span>
+     <div class="reco-h"><h2 id="rc-${r.topic}">${esc(r.topicName)}</h2><span class="pill ${r.urgency==='urgent'?'trap':r.urgency==='next step'?'ok':'scare'}">${esc(r.urgency)}</span>
        <span class="muted small">comfortable up to ${esc(r.ceiling)} → aim for ${esc(r.target)}</span></div>
+     ${r.why&&r.why.length?`<ul class="reco-why">${r.why.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>`:''}
      ${r.error?`<p class="note">${esc(r.error)}</p>`:''}
      ${r.courses.length?`<h3 class="sub-t">Courses</h3><div class="vid-grid">${r.courses.map(vidCard).join('')}</div>`:''}
      ${r.videos.length?`<h3 class="sub-t">Videos for this level</h3><div class="vid-grid">${r.videos.map(vidCard).join('')}</div>`:''}
@@ -432,7 +433,7 @@ async function renderHistory(){
       </div>
       ${h?`<div class="ceil-row">${ENG.TOPICS.map(t=>`<span class="ceil"><span class="muted small">${t.name}</span><span>${pill(h.ceilings[t.id]||'—')} <span class="muted small">batch ${esc(h.batchCeilings?.[t.id]||'—')}</span></span></span>`).join('')}</div>`:''}
       ${h&&h.recommendations.length?`<details class="hist-reco"><summary>Recommended then · ${h.recommendations.length} topic${h.recommendations.length===1?'':'s'}</summary>
-        ${h.recommendations.map(r=>`<div class="hr-t"><b>${esc(r.topicName)}</b> <span class="muted small">comfortable up to ${esc(r.ceiling)} → ${esc(r.target)}</span></div>
+        ${h.recommendations.map(r=>`<div class="hr-t"><b>${esc(r.topicName)}</b> <span class="muted small">comfortable up to ${esc(r.ceiling)} → ${esc(r.target)}${r.why&&r.why[1]?` · ${esc(r.why[1])}`:''}</span></div>
           <ul class="hr-list">${r.items.slice(0,6).map(v=>`<li><a href="${esc(v.url)}" target="_blank" rel="noopener noreferrer">${v.kind==='course'?'<span class="pill l2">course</span> ':''}${esc(v.title)}</a><span class="muted small"> · ${esc(v.channel)}</span></li>`).join('')}</ul>`).join('')}</details>`:h?'<p class="note">No weak topics on this paper.</p>':''}
       <div class="btn-row mt12">${h?`<button type="button" class="btn sm" data-act="histReport" data-arg="${esc(x.id)}">Open full report</button>`:''}
         ${!s&&x.surveyOpen?`<button type="button" class="btn sm p" data-act="openSurvey" data-arg="${esc(x.id)}">Rate this paper</button>`:''}</div>

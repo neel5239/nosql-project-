@@ -571,3 +571,7 @@ html.rm *,html.rm *::before,html.rm *::after{animation-duration:.01ms!important;
 /* flex column children must be allowed to shrink below their content (wide tables scroll inside .tbl-wrap) */
 .main-col>*{min-width:0}
 #appMain{width:100%;min-width:0}
+
+/* why these courses */
+.reco-why{list-style:none;margin:2px 0 14px;display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.reco-why li::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--acc);margin-right:9px;vertical-align:2px}
