@@ -314,22 +314,29 @@ const vidCard=v=>`<a class="vid" href="${esc(v.url)}" target="_blank" rel="noope
       <span class="vid-t">${esc(v.title)}</span><span class="vid-c">${esc(v.channel)}${v.views?` · ${esc(v.views)}`:''}</span><span class="sr"> (opens YouTube in a new tab)</span></a>`;
 async function renderLearn(){
   const body=$('#sBody');
-  if(!REP_EXAM||!REPORT){ body.innerHTML=REP_EXAM?lockedBox():lockedBox(); return }
+  // same exam picker as My report: every paper this student rated has its own courses
+  const head=()=>REP_EXAM?`<div class="rep-top"><div><h2 class="h2">Courses for ${esc(REP_EXAM.title)}</h2><span class="muted small">${fmtDate(REP_EXAM.examDate)}${REPORT?` · ${+REPORT.comfortPct}% of this paper felt comfortable`:''}</span></div>${examPicker(REP_EXAM.id,'repExam')}</div>`:'';
+  if(!REP_EXAM||!REPORT){ body.innerHTML=head()+lockedBox(); return }
   if(!RECO){
-    body.innerHTML=`<div class="card loading-card"><span class="spin" aria-hidden="true"></span>Finding courses for your weak topics…</div>`;
+    body.innerHTML=head()+`<div class="card loading-card"><span class="spin" aria-hidden="true"></span>Finding courses for this paper…</div>`;
     try{ RECO=(await API.get('/api/student/recommendations?exam='+encodeURIComponent(REP_EXAM.id))).items }
-    catch(e){ body.innerHTML=`<div class="card empty-state">${IC('alert')}<h2>Could not load recommendations</h2><p>${esc(e.message)}</p><button type="button" class="btn p" data-act="recoRetry">Try again</button></div>`; return }
+    catch(e){ body.innerHTML=head()+`<div class="card empty-state">${IC('alert')}<h2>Could not load recommendations</h2><p>${esc(e.message)}</p><button type="button" class="btn p" data-act="recoRetry">Try again</button></div>`; return }
     if(SVIEW!=='learn') return;
   }
-  if(!RECO.length){ body.innerHTML=`<div class="card empty-state">${IC('checkCircle')}<h2>Nothing to recommend yet</h2><p>Courses appear once your ratings for ${esc(REP_EXAM.title)} are in the report.</p></div>`; return }
-  body.innerHTML=`<div class="banner">${IC('book')}<span>Picked from your result on <b>${esc(REP_EXAM.title)}</b> — ${esc(REPORT.comfortPct)}% of the paper felt comfortable. Topics are ranked by your comfort ceiling, the gap to your batch and your blind spots; each course is one level above where you are comfortable now. Fetched from YouTube and saved in our database.</span></div>
+  if(!RECO.length){ body.innerHTML=head()+`<div class="card empty-state">${IC('checkCircle')}<h2>Nothing to recommend yet</h2><p>Courses appear once your ratings for ${esc(REP_EXAM.title)} are in the report.</p></div>`; return }
+  const qLine=s=>`<b>Q${+s.n}</b> <span class="sv-q">${esc(s.text)}</span><span class="muted small">teacher set ${esc(s.teacher)} · you felt ${esc(s.you)}${s.kind==='harder'?` · batch felt ${esc(s.batch)}`:''}</span>`;
+  const solves=r=>(r.solves||[]).map(s=>s.kind==='level'
+    ?`<li class="fix level"><span class="fix-k">LEVEL UP</span><span><b>${esc(s.from)} → ${esc(s.to)}</b> <span class="muted small">${s.of?`on this paper you were comfortable on ${+s.comfortable} of ${+s.of} ${esc(s.to)} questions — `:''}every course and video below is pitched at ${esc(s.to)}</span></span></li>`
+    :`<li class="fix ${s.kind}"><span class="fix-k">${s.kind==='blind'?'BLIND SPOT':'HARDER THAN BATCH'}</span><span>${qLine(s)}</span></li>`).join('');
+  body.innerHTML=head()+`<div class="banner">${IC('book')}<span>Picked from your own ratings on this paper. Topics are ranked by your comfort ceiling, the gap to your batch and your blind spots; each card says exactly which questions and which level its courses fix. Switch the paper above to see the courses for your other exams.</span></div>
   ${RECO.map(r=>`<section class="card reco" aria-labelledby="rc-${r.topic}">
      <div class="reco-h"><h2 id="rc-${r.topic}">${esc(r.topicName)}</h2><span class="pill ${r.urgency==='urgent'?'trap':r.urgency==='next step'?'ok':'scare'}">${esc(r.urgency)}</span>
        <span class="muted small">comfortable up to ${esc(r.ceiling)} → aim for ${esc(r.target)}</span></div>
-     ${r.why&&r.why.length?`<ul class="reco-why">${r.why.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>`:''}
+     ${r.solves&&r.solves.length?`<h3 class="sub-t">What these courses fix</h3><ul class="fixes">${solves(r)}</ul>`
+       :(r.why&&r.why.length?`<ul class="reco-why">${r.why.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>`:'')}
      ${r.error?`<p class="note">${esc(r.error)}</p>`:''}
-     ${r.courses.length?`<h3 class="sub-t">Courses</h3><div class="vid-grid">${r.courses.map(vidCard).join('')}</div>`:''}
-     ${r.videos.length?`<h3 class="sub-t">Videos for this level</h3><div class="vid-grid">${r.videos.map(vidCard).join('')}</div>`:''}
+     ${r.courses.length?`<h3 class="sub-t">Courses · ${esc(r.target)}</h3><div class="vid-grid">${r.courses.map(vidCard).join('')}</div>`:''}
+     ${r.videos.length?`<h3 class="sub-t">Videos · ${esc(r.target)}</h3><div class="vid-grid">${r.videos.map(vidCard).join('')}</div>`:''}
    </section>`).join('')}`;
 }
 ACT.recoRetry=()=>{RECO=null;renderLearn()};

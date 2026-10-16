@@ -62,15 +62,30 @@ async function recosFor(rep) {
     if (o.nHard) why.push(`${o.nHard} question${o.nHard === 1 ? '' : 's'} felt harder to you than to your batch`);
     if (blind) why.push(`${blind} blind spot${blind === 1 ? '' : 's'} — felt 2+ levels harder than the teacher rated`);
     if (!o.nHard && !blind && mi >= 0) why.push(mi >= 3 ? 'Keep practising at Elite level' : `Next step: move from ${o.my} to ${target}`);
+    // what these courses are meant to fix: the exact questions, and the level they move the student to
+    const qref = d => ({ n: d.q.n, text: String(d.q.text || '').slice(0, 110), teacher: E.BANDS[d.t - 1].name,
+      you: E.RATING[d.self - 1], batch: E.RATING[Math.min(3, Math.max(0, Math.round(Math.round(d.felt * 2) / 2) - 1))] });
+    const blindQs = rep.harderThanTeacher.filter(d => d.q.topic === o.t.id);
+    const blindN = new Set(blindQs.map(d => d.q.n));
+    const tb = o.bands.find(x => x.b.id === target);
+    const solves = [
+      ...blindQs.slice(0, 3).map(d => ({ kind: 'blind', ...qref(d) })),
+      ...rep.harderThanBatch.filter(d => d.q.topic === o.t.id && !blindN.has(d.q.n)).slice(0, 3).map(d => ({ kind: 'harder', ...qref(d) })),
+      { kind: 'level', from: mi < 0 ? 'none yet' : E.BANDS[mi].name, to: E.BANDS[E.bandIdx(target)].name,
+        comfortable: tb && tb.r ? Math.round(tb.r.acc * tb.r.n) : null, of: tb && tb.r ? tb.r.n : null }];
     const r = await getRecommendations(o.t.id, o.t.name, target);
-    return { topic: o.t.id, topicName: o.t.name, ceiling: o.my, batchCeiling: o.bt, target, why, blindSpots: blind, harderThanBatch: o.nHard,
+    // YouTube search sometimes mixes in other subjects: keep items that name the topic, when there are any
+    const kw = o.t.name.toLowerCase().replace(/'s/, '').split(/\s+/)[0].slice(0, 6);
+    const rel = list => { const m = (list || []).filter(v => String(v.title).toLowerCase().includes(kw)); return m.length ? m : (list || []) };
+    r.courses = (r.courses || []).filter(v => String(v.title).toLowerCase().includes(kw)); r.videos = rel(r.videos);   // a course from another subject is worse than none
+    return { topic: o.t.id, topicName: o.t.name, ceiling: o.my, batchCeiling: o.bt, target, why, solves, blindSpots: blind, harderThanBatch: o.nHard,
       urgency: o.score > 3 || mi < 0 ? 'urgent' : (o.score > 1.2 || blind) ? 'work on it' : 'next step',
       courses: r.courses, videos: r.videos, fetchedAt: r.fetchedAt, source: r.source, error: r.error || null };
   }));
 }
 
 /* history rows written before RECO_V lack the per-exam picks: rebuild them once at start-up */
-const RECO_V = 2;
+const RECO_V = 3;
 async function refreshHistory() {
   for (const ex of await col('exams').find({ status: { $ne: 'draft' } }, { projection: { _id: 1 } }).toArray()) {
     if (await col('student_history').findOne({ examId: ex._id, recoV: { $ne: RECO_V } }, { projection: { _id: 1 } })) await snapshot(ex._id);

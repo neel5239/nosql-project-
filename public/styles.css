@@ -575,3 +575,12 @@ html.rm *,html.rm *::before,html.rm *::after{animation-duration:.01ms!important;
 /* why these courses */
 .reco-why{list-style:none;margin:2px 0 14px;display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
 .reco-why li::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--acc);margin-right:9px;vertical-align:2px}
+
+/* courses: what each recommendation fixes */
+.fixes{list-style:none;display:flex;flex-direction:column;gap:8px;margin:4px 0 16px}
+.fix{display:grid;grid-template-columns:132px minmax(0,1fr);gap:12px;align-items:start;padding:10px 12px;border-radius:12px;box-shadow:var(--inset-sm);font-size:13px}
+.fix>span:last-child{display:flex;flex-direction:column;gap:2px;min-width:0}
+.fix .sv-q{color:var(--text);font-size:13.5px;font-weight:500;line-height:1.45}
+.fix-k{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:3px 8px;border-radius:8px;justify-self:start;background:color-mix(in srgb,currentColor 12%,transparent)}
+.fix.blind .fix-k{color:var(--red)}.fix.harder .fix-k{color:var(--amber)}.fix.level .fix-k{color:var(--green)}
+@media(max-width:600px){.fix{grid-template-columns:1fr;gap:6px}}
