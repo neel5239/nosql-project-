@@ -121,12 +121,71 @@ app.post('/api/auth/login', loginLimiter, wrap(async (req, res) => {
     throw new HttpError(401, 'E-mail or password is incorrect.');   // same message either way: no account enumeration
   }
   await col('login_attempts').deleteMany({ key });
+  await startSession(req, res, u);
+  await audit(u, 'login.ok');
+  res.json({ user: publicUser(u) });
+}));
+
+async function startSession(req, res, u) {
   await col('users').updateOne({ _id: u._id }, { $set: { lastLoginAt: new Date() }, $push: { logins: { $each: [{ at: new Date() }], $slice: -5 } } });
   const token = crypto.randomBytes(32).toString('hex');
   await col('sessions').insertOne({ tokenHash: sha(token), email: u.email, role: u.role, createdAt: new Date(), expiresAt: new Date(Date.now() + SESSION_HOURS * 3600e3), ua: String(req.headers['user-agent'] || '').slice(0, 160) });
   setSid(req, res, token, SESSION_HOURS * 3600);
-  await audit(u, 'login.ok');
-  res.json({ user: publicUser(u) });
+}
+
+/* ---------- self sign-up: students only ----------
+   Teachers, branch heads and the company see other people's ratings, so those accounts are set up by
+   the institute — a public form must never hand out that access. A student picks their batch, gets the
+   next roll number, receives the batch's open surveys like everyone else, and is signed in at once. */
+const signupLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: +process.env.SIGNUP_RATE_LIMIT || 10, standardHeaders: 'draft-8', legacyHeaders: false,
+  message: { error: 'Too many accounts created from this network. Try again in an hour.' } });
+const PW_RULE = p => p.length >= 8 && /[a-z]/i.test(p) && /\d/.test(p);
+
+app.get('/api/auth/batches', wrap(async (req, res) => {
+  const bs = await col('batches').find({}, { projection: { name: 1 } }).sort({ name: 1 }).toArray();
+  res.json({ batches: bs.map(b => ({ id: b._id, name: b.name })) });
+}));
+
+app.post('/api/auth/signup', signupLimiter, wrap(async (req, res) => {
+  const email = str(req.body?.email, 190)?.trim().toLowerCase();
+  const password = str(req.body?.password, 128);
+  const name = cleanName(req.body?.name).slice(0, 80);
+  const batchId = str(req.body?.batch, 40);
+  if (!email || !password || !name || !batchId) throw new HttpError(400, 'Name, e-mail, batch and password are all required.');
+  if (name.length < 2) throw new HttpError(400, 'Enter your full name.');
+  const r = routeFor(email);
+  if (r.err) throw new HttpError(400, r.err);
+  if (r.role !== 'student') throw new HttpError(403, 'Only students can create an account here. Teacher, branch and company accounts are set up by the institute.');
+  if (!PW_RULE(password)) throw new HttpError(400, 'Password needs at least 8 characters, with a letter and a number.');
+  const batch = await col('batches').findOne({ _id: batchId });
+  if (!batch) throw new HttpError(400, 'Pick your batch from the list.');
+  const taken = () => new HttpError(409, 'An account with this e-mail already exists — sign in instead.');
+  if (await col('users').findOne({ email }, { projection: { _id: 1 } })) throw taken();
+  const passHash = await bcrypt.hash(password, 10);
+
+  // next student id and roll number; _id is unique, so two sign-ups at the same moment retry instead of colliding
+  let sid = null;
+  for (let i = 0; i < 5 && !sid; i++) {
+    const all = await col('students').find({}, { projection: { _id: 1, roll: 1, batchId: 1 } }).toArray();
+    const n = Math.max(0, ...all.map(s => parseInt(String(s._id).slice(1), 10) || 0)) + 1;
+    const peer = all.find(s => s.batchId === batchId && /^[A-Z0-9]+-\d+$/.test(s.roll || ''));
+    const roll = (peer ? peer.roll.split('-')[0] : 'NEW') + '-' + String(n).padStart(3, '0');
+    try { await col('students').insertOne({ _id: 'S' + n, roll, name, batchId, email, selfSignup: true, createdAt: new Date() }); sid = 'S' + n }
+    catch (e) { if (e.code !== 11000) throw e }
+  }
+  if (!sid) throw new HttpError(503, 'Could not create the account right now — please try again.');
+  try {
+    await col('users').insertOne({ email, name, role: 'student', studentId: sid, passHash, theme: 'light', createdAt: new Date() });
+  } catch (e) {
+    await col('students').deleteOne({ _id: sid });
+    if (e.code === 11000) throw taken();
+    throw e;
+  }
+  for (const ex of await col('exams').find({ batchId, status: 'published', surveyOpen: true }).toArray()) await X.notifySurvey(ex, [sid]);
+  const u = await col('users').findOne({ email });
+  await startSession(req, res, u);
+  await audit(u, 'signup', { batchId });
+  res.status(201).json({ user: publicUser(u) });
 }));
 
 app.post('/api/auth/logout', auth(), wrap(async (req, res) => {

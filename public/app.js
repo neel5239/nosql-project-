@@ -137,12 +137,51 @@ async function doLogin(){
     fail(e.message, e.status===401&&/password/i.test(e.message)?'#lgPass':'#lgEmail');
   }finally{ busy=false; b.disabled=false; b.textContent='Sign in' }
 }
+/* ---------- student sign-up ---------- */
+let batchesLoaded=false;
+ACT.showSignup=async()=>{
+  $('#lgForm').hidden=true; $('#suForm').hidden=false; $('#suErr').className='err'; $('#suName').focus();
+  if(batchesLoaded) return;
+  try{
+    const {batches}=await API.get('/api/auth/batches');
+    $('#suBatch').innerHTML=(batches.length>1?'<option value="">Choose your batch</option>':'')+batches.map(b=>`<option value="${esc(b.id)}">${esc(b.name)}</option>`).join('');
+    batchesLoaded=true;
+  }catch(e){ $('#suBatch').innerHTML='<option value="">Could not load batches</option>'; suFail(e.message) }
+};
+ACT.showLogin=()=>{ $('#suForm').hidden=true; $('#lgForm').hidden=false; $('#lgEmail').focus() };
+function suFail(msg,field){
+  const err=$('#suErr'); err.className='err on'; err.textContent=msg;
+  $$('#suForm .in').forEach(i=>i.removeAttribute('aria-invalid'));
+  if(field){const f=$(field); f.setAttribute('aria-invalid','true'); f.focus()}
+}
+$('#suForm').addEventListener('submit',async e=>{
+  e.preventDefault(); if(busy) return;
+  const name=$('#suName').value.trim(), email=$('#suEmail').value.trim().toLowerCase(), batch=$('#suBatch').value, password=$('#suPass').value;
+  if(name.length<2) return suFail('Enter your full name.','#suName');
+  const r=routeFor(email);
+  if(r.err) return suFail(r.err,'#suEmail');
+  if(r.role!=='student') return suFail('Only students can create an account here. Teacher, branch and company accounts are set up by the institute.','#suEmail');
+  if(!batch) return suFail('Pick your batch from the list.','#suBatch');
+  if(password.length<8||!/[a-z]/i.test(password)||!/\d/.test(password)) return suFail('Password needs at least 8 characters, with a letter and a number.','#suPass');
+  if(password!==$('#suPass2').value) return suFail('The two passwords do not match.','#suPass2');
+  busy=true; const b=$('#suBtn'); b.disabled=true; b.innerHTML='<span class="spin" aria-hidden="true"></span>Creating your account…';
+  try{
+    await API.post('/api/auth/signup',{name,email,batch,password});
+    $('#suPass').value=''; $('#suPass2').value='';
+    $('#suForm').hidden=true; $('#lgForm').hidden=false;
+    await boot(true);
+    toast(`${IC('check')} Account created — welcome, ${esc(name.split(' ')[0])}!`);
+  }catch(err){ suFail(err.message, err.status===409?'#suEmail':null) }
+  finally{ busy=false; b.disabled=false; b.textContent='Create account' }
+});
+
 async function signOut(){
   try{ await API.post('/api/auth/logout') }catch(e){}
   ME=null; E=null; BR=null; ROLE=null; REP_EXAM=null; T_EXAM=null; SV_EXAM=null; SURVEY=null; RECO=null; SVIEW='report'; VIEW='dash'; PROFILE=null; NOTIF={items:[],unread:0,pending:0}; paintBell();
   document.documentElement.classList.remove('rm'); closeSide();
   clearInterval(liveTimer);
   $('#appShell').classList.remove('on'); $('#loginScreen').classList.add('on');
+  $('#suForm').hidden=true; $('#lgForm').hidden=false;
   document.title='Sign in — ANUMAAN';
   applyTheme('light');
   previewRoute(); $('#lgEmail').focus();

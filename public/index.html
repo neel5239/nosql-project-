@@ -47,6 +47,27 @@
         <div id="lgErr" class="err" role="alert" aria-live="assertive"></div>
         <div id="lgRoute" class="route" aria-live="polite"></div>
         <button type="submit" class="btn p lg" id="lgBtn">Sign in</button>
+        <p class="lg-switch muted">New student? <button type="button" class="linkbtn" data-act="showSignup">Create an account</button></p>
+      </form>
+
+      <form class="card lg-card" id="suForm" novalidate hidden>
+        <h2>Create a student account</h2>
+        <p class="muted">For students. Teacher, branch and company accounts are set up by your institute.</p>
+        <label class="lbl" for="suName">Full name</label>
+        <input id="suName" class="in" type="text" placeholder="e.g. Riya Sharma" maxlength="80" autocomplete="name">
+        <label class="lbl" for="suEmail">Institute e-mail</label>
+        <input id="suEmail" class="in" type="email" inputmode="email" placeholder="firstname.lastname@student.allen.edu.in"
+               autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120">
+        <label class="lbl" for="suBatch">Your batch</label>
+        <select id="suBatch" class="in"><option value="">Loading batches…</option></select>
+        <label class="lbl" for="suPass">Password</label>
+        <input id="suPass" class="in" type="password" placeholder="At least 8 characters, a letter and a number" maxlength="64" autocomplete="new-password" aria-describedby="suHint">
+        <label class="lbl" for="suPass2">Confirm password</label>
+        <input id="suPass2" class="in" type="password" placeholder="Type it again" maxlength="64" autocomplete="new-password">
+        <p class="muted small" id="suHint">Your report starts with the next survey your teacher sends; any survey that is open now appears straight away.</p>
+        <div id="suErr" class="err" role="alert" aria-live="assertive"></div>
+        <button type="submit" class="btn p lg" id="suBtn">Create account</button>
+        <p class="lg-switch muted">Already have an account? <button type="button" class="linkbtn" data-act="showLogin">Sign in</button></p>
       </form>
 
       <div class="card demo">

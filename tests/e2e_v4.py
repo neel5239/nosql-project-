@@ -212,7 +212,7 @@ def suite_ui(b, wk):
     p.keyboard.press("Escape")
     p.screenshot(path=str(OUT / "v4_teacher_dash.png"))
     p.click("[data-act=newExam]"); p.fill("#nxTitle", "UI · Mixed pulse")
-    p.set_input_files("#nxFile", files=[{"name": "q.csv", "mimeType": "text/csv", "buffer": QCSV.encode()}]); p.wait_for_selector("text=ready")
+    p.set_input_files("#nxFile", files=[{"name": "q.csv", "mimeType": "text/csv", "buffer": QCSV.encode()}]); p.wait_for_selector("#nxName:has-text('ready')")
     p.click("[data-act=createExam]"); p.wait_for_selector(".band-seg")
     for i, band in enumerate(["L1", "L2", "L2", "L3", "L1", "L4"], 1): p.click(f"[data-act=markBand][data-arg='Q{i}:{band}']")
     p.wait_for_timeout(600); p.click("#approveBtn"); p.wait_for_selector("#liveBox")
@@ -293,13 +293,63 @@ def suite_account(b, wk):
     check("phone: choosing Profile closes the drawer", q.get_attribute("#burger", "aria-expanded") == "false" and q.evaluate("document.documentElement.scrollWidth-innerWidth") <= 0)
     c.close()
 
+def suite_signup(b):
+    """runs last: new students join batch b1, which would shift the batch counts checked earlier"""
+    print("\n-- sign-up (students only)")
+    c = b.new_context()
+    s, j, _ = api(c, "GET", "/api/auth/batches")
+    check("sign-up: batch list is public and shows only id + name", s == 200 and j["batches"] and all(set(x) == {"id", "name"} for x in j["batches"]), j)
+    bid = j["batches"][0]["id"]
+    good = {"name": "Riya Test", "email": "riya.test@student.allen.edu.in", "batch": bid, "password": "riya2026x"}
+    bad = [({**good, "email": "new.teacher@faculty.allen.edu.in"}, 403, "teacher domain"),
+           ({**good, "email": "x@admin.allen.edu.in"}, 400, "unknown branch domain"),
+           ({**good, "password": "short1"}, 400, "weak password"),
+           ({**good, "batch": "b999"}, 400, "unknown batch"),
+           ({**good, "email": {"$gt": ""}}, 400, "operator injection in e-mail"),
+           ({**good, "name": " "}, 400, "empty name")]
+    got = [api(c, "POST", "/api/auth/signup", body)[0] for body, _, _ in bad]
+    check("sign-up refused: teacher domain 403, bad domain / weak password / unknown batch / injection / empty name 400",
+          got == [code for _, code, _ in bad], list(zip([w for *_, w in bad], got)))
+    s, j, h = api(c, "POST", "/api/auth/signup", good)
+    check("sign-up: student account created and signed in at once (201 + session cookie)", s == 201 and j["user"]["role"] == "student" and "sid=" in (h.get("set-cookie") or ""), (s, j))
+    s, me, _ = api(c, "GET", "/api/session")
+    check("sign-up: the new session works straight away", s == 200 and (me.get("user") or {}).get("email") == good["email"], me)
+    st = mongo("const s=await db.collection('students').findOne({email:'riya.test@student.allen.edu.in'});const u=await db.collection('users').findOne({email:'riya.test@student.allen.edu.in'});"
+               "return {sid:s&&s._id,roll:s&&s.roll,batch:s&&s.batchId,link:u&&u.studentId,hash:u&&u.passHash.slice(0,4),plain:JSON.stringify(u).includes('riya2026x')}")
+    check("sign-up: students + users documents linked, roll number given, password stored only as a bcrypt hash",
+          st["sid"] and st["link"] == st["sid"] and st["batch"] == bid and "-" in st["roll"] and st["hash"].startswith("$2") and not st["plain"], st)
+    want = count("exams", f"{{batchId:'{bid}',status:'published',surveyOpen:true}}")
+    s, n, _ = api(c, "GET", "/api/student/notifications")
+    check("sign-up: every survey open in the batch reaches the new student", s == 200 and n["pending"] == want, (want, n.get("pending")))
+    s, _, _ = api(b.new_context(), "POST", "/api/auth/signup", {**good, "email": "RIYA.TEST@student.allen.edu.in"})
+    check("sign-up: the same e-mail cannot register twice (409, case-insensitive)", s == 409, s)
+    s, _, _ = api(b.new_context(), "POST", "/api/auth/login", {"email": good["email"], "password": good["password"]})
+    check("sign-up: the new account can sign in with its own password", s == 200, s)
+    s, _, _ = api(c, "POST", "/api/auth/signup", {**good, "email": "x.y@student.allen.edu.in", "name": "<img src=x onerror=alert(1)> Zed"})
+    nm = mongo("return (await db.collection('users').findOne({email:'x.y@student.allen.edu.in'}))?.name")
+    check("sign-up: HTML in the name is stripped before it is stored", s == 201 and "<" not in str(nm) and ">" not in str(nm), nm)
+    c.close()
+    ctx = b.new_context(); p = ctx.new_page(); errs = errs_of(p)
+    p.goto(BASE); p.wait_for_load_state("networkidle")
+    p.click("[data-act=showSignup]"); p.wait_for_selector("#suForm:not([hidden])")
+    p.wait_for_selector("#suBatch option[value='b1']", state="attached"); p.select_option("#suBatch", "b1"); p.fill("#suName", "Ui Test"); p.fill("#suEmail", "ui.test@student.allen.edu.in"); p.fill("#suPass", "uitest2026"); p.fill("#suPass2", "uitest2027")
+    p.click("#suBtn"); p.wait_for_timeout(200)
+    check("sign-up form: mismatched passwords caught before sending", "do not match" in p.text_content("#suErr"))
+    p.fill("#suPass2", "uitest2026"); p.click("#suBtn"); p.wait_for_selector("#appShell.on", timeout=15000)
+    p.wait_for_selector("#pane-student.on .h1")
+    check("sign-up form: creates the account and opens the student dashboard", "Ui Test" in p.text_content("#sideAcc"))
+    p.click("[data-sign-out]"); p.wait_for_selector("#lgForm")
+    check("sign-up form: after sign-out the sign-in form is shown, not the sign-up form", p.is_visible("#lgForm") and not p.is_visible("#suForm"))
+    check("sign-up: no console / page errors", not errs, errs[:3])
+    ctx.close()
+
 def main():
     global BASE, PW
     r = subprocess.run(["node", "server/seed.js", "--no-reco"], cwd=ROOT, env=ENV, capture_output=True, text=True, timeout=300)
     check("seed test database", r.returncode == 0 and "pending survey notifications" in r.stdout, (r.stdout + r.stderr)[-200:])
     check("history seeded: 110 rows (40+40+30)", count("student_history") == 110)
     port = free_port(); BASE = f"http://127.0.0.1:{port}"
-    srv = subprocess.Popen(["node", "server/server.js"], cwd=ROOT, env={**ENV, "PORT": str(port), "LOGIN_RATE_LIMIT": "1000"}, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    srv = subprocess.Popen(["node", "server/server.js"], cwd=ROOT, env={**ENV, "PORT": str(port), "LOGIN_RATE_LIMIT": "1000", "SIGNUP_RATE_LIMIT": "1000"}, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     for _ in range(60):
         try: urllib.request.urlopen(BASE + "/api/health", timeout=1); break
         except Exception: time.sleep(0.2)
@@ -313,6 +363,8 @@ def main():
             except Exception as e: check("suite_ui crashed", False, repr(e))
             try: suite_account(b, wk)
             except Exception as e: check("suite_account crashed", False, repr(e))
+            try: suite_signup(b)
+            except Exception as e: check("suite_signup crashed", False, repr(e))
             b.close(); wk.close()
     finally: srv.terminate()
     failed = [x for x in R if not x[1]]
